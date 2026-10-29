@@ -1,0 +1,43 @@
+.site-information {
+  width: min(100% - 2rem, 1100px);
+  margin: 3rem auto 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 3rem;
+  row-gap: 2rem;
+  color: var(--p-font-color);
+}
+
+.site-information section {
+  min-width: 0;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--p-font-color) 24%, transparent);
+  scroll-margin-top: 1rem;
+}
+
+.site-information h2 {
+  margin: 0 0 0.65rem;
+  color: var(--h1-font-color);
+  font-size: 1.25rem;
+}
+
+.site-information p {
+  margin: 0;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.site-information a {
+  color: var(--header-logo-color);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+@media (max-width: 640px) {
+  .site-information {
+    width: calc(100% - 2rem);
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 1.5rem;
+    margin-top: 2rem;
+  }
+}

@@ -1,0 +1,71 @@
+name: ViDowner CI/CD
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  frontend:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Run TypeScript check
+        run: npm run typecheck
+
+      - name: Build frontend
+        run: npm run build
+
+  server:
+    name: Server CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: npm install
+
+      - name: Check server syntax
+        run: node --check app.js
+
+  deploy:
+    name: Deployment placeholder
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [frontend, server]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Placeholder deployment step
+        run: echo "Add your deployment command here for Vercel, Render, Netlify, EC2, or any other hosting target."

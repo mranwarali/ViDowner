@@ -15,11 +15,13 @@ const initialState: DownloadState = {
   error: null,
 };
 
+const apiBaseUrl = (import.meta.env.VITE_API_URL || window.location.origin).replace(/\/$/, "");
+
 const endpoints: Record<Platform, string> = {
-  yt: "http://localhost:3030/api/v1/yt",
-  tw: "http://localhost:3030/api/v1/tw",
-  fb: "http://localhost:3030/api/v1/fb",
-  ig: "http://localhost:3030/api/v1/ig",
+  yt: `${apiBaseUrl}/api/v1/yt`,
+  tw: `${apiBaseUrl}/api/v1/tw`,
+  fb: `${apiBaseUrl}/api/v1/fb`,
+  ig: `${apiBaseUrl}/api/v1/ig`,
 };
 
 export const fetchDownload = createAsyncThunk<

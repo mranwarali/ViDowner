@@ -16,10 +16,15 @@ const app = express();
 // Environment variables
 const MONGO_CONNECT = process.env.MONGODB_URI;
 const PORT = process.env.PORT || 3030;
+const FRONTEND_ORIGINS = [
+  process.env.FRONTEND_URL,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+].filter(Boolean);
 
 // Validate MongoDB connection string
 if (!MONGO_CONNECT) {
-  console.error("Error: MONGODB_URI is missing.");
+  console.error("Error: MONGODB_URI is missing. Add it in Render > Environment.");
   process.exit(1);
 }
 
@@ -34,9 +39,17 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "*",
+    origin: (origin, callback) => {
+      if (!origin || FRONTEND_ORIGINS.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
@@ -121,7 +134,7 @@ const startServer = async () => {
       console.log(`Server running on port ${PORT}`);
     });
   } catch (error) {
-    console.error("Failed to connect to MongoDB:", error);
+    console.error("Failed to connect to M ongoDB:", error);
     process.exit(1);
   }
 };

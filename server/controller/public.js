@@ -1,6 +1,27 @@
 const axios = require("axios");
 require("dotenv").config();
-const aufs = require("all-url-file-size");
+
+const getFileSizeMb = async (url) => {
+  try {
+    const response = await axios.head(url, {
+      validateStatus: () => true,
+      timeout: 15000,
+    });
+
+    const sizeBytes = Number(
+      response.headers["content-length"] || response.headers["Content-Length"] || 0
+    );
+
+    if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+      return "0.0";
+    }
+
+    return (sizeBytes / (1024 * 1024)).toFixed(1);
+  } catch (error) {
+    console.warn(`Unable to resolve file size for ${url}:`, error.message);
+    return "0.0";
+  }
+};
 
 exports.startApi = (req, res, next) => {
   res.status(200).json({ message: "Welcome To Vidown Api" });
@@ -110,42 +131,43 @@ exports.postTwitter = async (req, res, next) => {
   try {
     axios
       .request(options)
-      .then((response) => {
+      .then(async (response) => {
         const data = response.data;
-        let dataList = [];
+        const dataUrl = data[0]?.urls || [];
 
-        let dataUrl = data[0].urls;
-
-        for (let i = 0; i < dataUrl.length; i++) {
-          aufs(dataUrl[i].url, "MB")
-            .then((size) => {
-              dataList.push({
-                url: dataUrl[i].url,
-                quality: dataUrl[i].subName + "P",
-                size: size.toFixed(1),
-              });
-            })
-            .then((result) => {
-              console.log(dataList);
-              if (dataList.length === dataUrl.length) {
-                res.status(200).json({
-                  thumb: data[0]["pictureUrl"],
-                  urls: dataList,
-                  title: data[0]["meta"]["title"],
-                });
-                req.users
-                  .addActivity({ twUrl: twUrl })
-                  .then((result) => {
-                    console.log(result);
-                  })
-                  .catch((err) => {
-                    const error = new Error(err);
-                    error.httpStatusCode = 500;
-                    return next(error);
-                  });
-              }
-            });
+        if (!dataUrl.length) {
+          return res.status(403).json({
+            status: "fail",
+            error:
+              "Sorry, we couldn't locate the video you're looking for. It's possible that the video is set to private or has been removed.",
+            code: 403,
+          });
         }
+
+        const dataList = await Promise.all(
+          dataUrl.map(async (item) => ({
+            url: item.url,
+            quality: `${item.subName}P`,
+            size: await getFileSizeMb(item.url),
+          }))
+        );
+
+        res.status(200).json({
+          thumb: data[0]["pictureUrl"],
+          urls: dataList,
+          title: data[0]["meta"]["title"],
+        });
+
+        req.users
+          .addActivity({ twUrl: twUrl })
+          .then((result) => {
+            console.log(result);
+          })
+          .catch((err) => {
+            const error = new Error(err);
+            error.httpStatusCode = 500;
+            return next(error);
+          });
       })
       .catch((err) => {
         res.status(403).json({
@@ -176,20 +198,20 @@ exports.postFb = (req, res, next) => {
   const fbUrl = req.body.urls;
 
   const options = {
-    method: 'GET',
-    url: 'https://facebook-reel-and-video-downloader.p.rapidapi.com/app/main.php',
+    method: "GET",
+    url: "https://facebook-reel-and-video-downloader.p.rapidapi.com/app/main.php",
     params: {
-      url: 'https://www.facebook.com/share/r/19hAnb69w2/'
+      url: fbUrl,
     },
     headers: {
-      'x-rapidapi-key': process.env.FB_API_KEY,
-      'x-rapidapi-host': 'facebook-reel-and-video-downloader.p.rapidapi.com'
-    }
+      "x-rapidapi-key": process.env.FB_API_KEY,
+      "x-rapidapi-host": "facebook-reel-and-video-downloader.p.rapidapi.com",
+    },
   };
 
   axios
     .request(options)
-    .then((response) => {
+    .then(async (response) => {
       const dataList = response.data;
       const format = dataList.links;
 
@@ -202,43 +224,28 @@ exports.postFb = (req, res, next) => {
         });
       }
 
-      const formatEntries = Object.entries(format);
-      const sizePromises = formatEntries.map(([key, url]) =>
-        aufs(url, "MB").then((size) => ({
-          url: url,
+      const formatEntries = Object.entries(format || {});
+      const urls = await Promise.all(
+        formatEntries.map(async ([key, url]) => ({
+          url,
           quality: key.toUpperCase(),
-          size: size.toFixed(1),
+          size: await getFileSizeMb(url),
         }))
       );
 
-      Promise.all(sizePromises)
-        .then((urls) => {
-          res.status(200).json({
-            thumb: dataList["thumbnail"],
-            urls: urls,
-            title: dataList?.["description"] || "Your Facebook Videos",
-          });
-          return req.users.addActivity({ fbUrl: fbUrl });
-        })
-        .then((result) => {
-          console.log(result);
-        })
-        .catch((err) => {
-          const error = new Error(err);
-          error.httpStatusCode = 500;
-          return next(error);
-        });
+      res.status(200).json({
+        thumb: dataList["thumbnail"],
+        urls,
+        title: dataList?.["description"] || "Your Facebook Videos",
+      });
+      return req.users.addActivity({ fbUrl: fbUrl });
+    })
+    .then((result) => {
+      console.log(result);
     })
     .catch((err) => {
-      res.status(403).json({
-        status: "fail",
-        error:
-          "Sorry, we couldn't locate the video you're looking for. It's possible that the video is set to private or has been removed.",
-        code: 403,
-      });
-
       const error = new Error(err);
-      error.httpStatusCode = 403;
+      error.httpStatusCode = 500;
       return next(error);
     });
 };
@@ -247,24 +254,24 @@ exports.otherPost = (req, res, next) => {
   const igUrl = req.body.urls;
 
   const encodedParams = new URLSearchParams();
-  encodedParams.set('url', igUrl);
+  encodedParams.set("url", igUrl);
 
   const options = {
-    method: 'POST',
-    url: 'https://snap-video3.p.rapidapi.com/download',
+    method: "POST",
+    url: "https://snap-video3.p.rapidapi.com/download",
     headers: {
-      'x-rapidapi-key': process.env.IG_API_KEY,
-      'x-rapidapi-host': 'snap-video3.p.rapidapi.com',
-      'Content-Type': 'application/x-www-form-urlencoded'
+      "x-rapidapi-key": process.env.IG_API_KEY,
+      "x-rapidapi-host": "snap-video3.p.rapidapi.com",
+      "Content-Type": "application/x-www-form-urlencoded",
     },
     data: encodedParams,
   };
 
   axios
     .request(options)
-    .then((response) => {
+    .then(async (response) => {
       const formats = response.data;
-      const videData = formats.medias;
+      const videData = formats.medias || [];
 
       if (formats.error === true) {
         return res.status(403).json({
@@ -275,31 +282,23 @@ exports.otherPost = (req, res, next) => {
         });
       }
 
-      const sizePromises = videData.map(data =>
-        aufs(data.url, "MB").then((size) => ({
+      const urls = await Promise.all(
+        videData.map(async (data) => ({
           url: data.url,
-          quality: data.quality.length > 1 ? data.quality.toUpperCase() : "720P",
-          size: size.toFixed(1),
+          quality: data.quality?.length > 1 ? data.quality.toUpperCase() : "720P",
+          size: await getFileSizeMb(data.url),
         }))
       );
 
-      Promise.all(sizePromises)
-        .then((urls) => {
-          res.status(200).json({
-            thumb: formats.thumbnail,
-            urls: urls,
-            title: formats.title ||  "Your IG Videos",
-          });
-          return req.users.addActivity({ igUrl: igUrl });
-        })
-        .then((result) => {
-          console.log("OK");
-        })
-        .catch((err) => {
-          const error = new Error(err);
-          error.httpStatusCode = 500;
-          return next(error);
-        });
+      res.status(200).json({
+        thumb: formats.thumbnail,
+        urls,
+        title: formats.title || "Your IG Videos",
+      });
+      return req.users.addActivity({ igUrl: igUrl });
+    })
+    .then((result) => {
+      console.log("OK");
     })
     .catch((err) => {
       console.log(err);
